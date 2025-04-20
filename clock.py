@@ -91,21 +91,21 @@ lcd = None
 disable_button = None
 id_display_button = None
 vibrator_toggle_button = None
-try:
-    tz_info = pytz.timezone(TIMEZONE)
-    GPIO.setmode(GPIO.BCM)
-    # Configura LED e vibrator motor
-    GPIO.setup(LED_PIN, GPIO.OUT, initial=GPIO.LOW)
-    GPIO.setup(MOTOR_PIN, GPIO.OUT, initial=GPIO.LOW)
-    # Configura bottoni con gpiozero
-    disable_button = Button(DISABLE_BUTTON_PIN, pull_up=True)
-    id_display_button = Button(ID_DISPLAY_BUTTON_PIN, pull_up=True)
-    vibrator_toggle_button = Button(VIBRATOR_TOGGLE_BUTTON_PIN, pull_up=True)
-    # Inizializza LCD
-    lcd = Adafruit_CharLCD(rs=LCD_RS, en=LCD_E, d4=LCD_D4, d5=LCD_D5, d6=LCD_D6, d7=LCD_D7, cols=16, lines=2)
-    lcd.clear()
-    lcd.enable_display(True)
-    lcd.home()
+
+tz_info = pytz.timezone(TIMEZONE)
+GPIO.setmode(GPIO.BCM)
+# Configura LED e vibrator motor
+GPIO.setup(LED_PIN, GPIO.OUT, initial=GPIO.LOW)
+GPIO.setup(MOTOR_PIN, GPIO.OUT, initial=GPIO.LOW)
+# Configura bottoni con gpiozero
+disable_button = Button(DISABLE_BUTTON_PIN, pull_up=True)
+id_display_button = Button(ID_DISPLAY_BUTTON_PIN, pull_up=True)
+vibrator_toggle_button = Button(VIBRATOR_TOGGLE_BUTTON_PIN, pull_up=True)
+# Inizializza LCD
+lcd = Adafruit_CharLCD(rs=LCD_RS, en=LCD_E, d4=LCD_D4, d5=LCD_D5, d6=LCD_D6, d7=LCD_D7, cols=16, lines=2)
+lcd.clear()
+lcd.enable_display(True)
+lcd.home()
 
 # --- Funzioni per gestire LED e Vibrator Motor ---
 def light_leds():
@@ -138,13 +138,12 @@ def id_display_button_callback():
         return
     display_mode = 'showing_id'
     id_display_start_time = time.monotonic()
-    try:
-        if lcd:
-            lcd.clear()
-            if len(MY_PI_ID) > 16:
-                lcd.message(f"ID:{MY_PI_ID[:16]}\n{MY_PI_ID[16:]}")
-            else:
-                lcd.message(f"ID Dispositivo:\n{MY_PI_ID.center(16)}")
+    if lcd:
+        lcd.clear()
+        if len(MY_PI_ID) > 16:
+            lcd.message(f"ID:{MY_PI_ID[:16]}\n{MY_PI_ID[16:]}")
+        else:
+            lcd.message(f"ID Dispositivo:\n{MY_PI_ID.center(16)}")
     
 
 def vibrator_motor_toggle_callback():
@@ -194,6 +193,7 @@ signal.signal(signal.SIGTERM, cleanup_resources)
 
 # Variabile per tenere traccia del minuto corrente (per il reset del flag)
 current_minute = None
+print("Inizializzazione completata. In attesa di eventi...")
 
 while True:
     # Reset del flag alarm_manually_disabled ad inizio nuovo minuto
