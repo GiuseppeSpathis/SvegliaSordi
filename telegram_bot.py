@@ -9,26 +9,16 @@ import pytz
 import time
 import threading
 import signal # Per gestire SIGTERM/SIGINT nel thread
+from telegram import Update
+from telegram.ext import Application, CommandHandler, CallbackContext
+import firebase_admin
+from firebase_admin import credentials, db
 
-# Import librerie necessarie
-try:
-    from telegram import Update
-    from telegram.ext import Application, CommandHandler, CallbackContext
-except ImportError:
-    print("Errore: Libreria python-telegram-bot non trovata. Installala con 'pip install python-telegram-bot'")
-    exit()
-
-try:
-    import firebase_admin
-    from firebase_admin import credentials, db
-except ImportError:
-    print("Errore: Libreria firebase-admin non trovata. Installala con 'pip install firebase-admin'")
-    exit()
 
 # --- Configurazione Utente ---
-BOT_TOKEN = "7824989957:AAETWh9iqhzKDChpgDZ1GsMGijHUusOxziI" # <-- SOSTITUISCI CON IL TUO TOKEN
-PATH_TO_FIREBASE_KEY = "firebaseKey.json" # <-- Assicurati che il nome file sia corretto
-FIREBASE_DB_URL = "https://svegliasordi-default-rtdb.europe-west1.firebasedatabase.app" # <-- SOSTITUISCI (es: https://nome-progetto-default-rtdb.europe-west1.firebasedatabase.app)
+BOT_TOKEN = "7824989957:AAETWh9iqhzKDChpgDZ1GsMGijHUusOxziI" 
+PATH_TO_FIREBASE_KEY = "firebaseKey.json" 
+FIREBASE_DB_URL = "https://svegliasordi-default-rtdb.europe-west1.firebasedatabase.app" 
 PI_ID = "pi1" # Identificativo del Raspberry Pi da triggerare
 TIMEZONE = "Europe/Rome"
 # --- Fine Configurazione Utente ---
@@ -275,8 +265,9 @@ async def delete_alarm(update: Update, context: CallbackContext):
     except Exception as e:
         logger.error(f"Errore in delete_alarm per {pi_id}: {e}", exc_info=True)
         await update.message.reply_text("❌ Errore durante l'eliminazione.")
-
-# --- Logica Background (Modificata per Multi-Pi) ---
+        
+        
+# --- Funzione per Controllo e Trigger Allarmi ---
 
 def check_and_trigger_alarms_runner():
     """Loop principale del thread che controlla gli allarmi per tutti i Pi."""
@@ -314,8 +305,7 @@ def check_and_trigger_alarms_runner():
 
 
             # --- Scrittura/Reset Triggers ---
-            # Ottimizzazione: Carica tutti i trigger attuali in una volta se possibile?
-            # Per semplicità, li gestiamo uno per uno
+            # Per semplicità, vengono gestiti tutti i triggers uno per uno
             active_triggers_ref = db.reference('/triggers')
             try:
                  # Leggi tutti i trigger attuali per sapere quali resettare
@@ -395,7 +385,7 @@ def check_and_trigger_alarms_runner():
     logger.info("Thread check_and_trigger_alarms: Terminato.")
 
 
-# --- Funzione Principale (Aggiornata con nuovi comandi) ---
+# --- Funzione Principale ---
 def main():
     global keep_running
     # Gestione segnali di terminazione per fermare il thread
@@ -417,7 +407,7 @@ def main():
 
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # Aggiungi i nuovi comandi e aggiorna i vecchi
+    
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("pair", pair_command))
     application.add_handler(CommandHandler("unpair", unpair_command))
