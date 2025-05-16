@@ -19,7 +19,7 @@ from firebase_admin import credentials, db
 BOT_TOKEN = "7824989957:AAETWh9iqhzKDChpgDZ1GsMGijHUusOxziI" 
 PATH_TO_FIREBASE_KEY = "firebaseKey.json" 
 FIREBASE_DB_URL = "https://svegliasordi-default-rtdb.europe-west1.firebasedatabase.app" 
-PI_ID = "pi1" # Identificativo del Raspberry Pi da triggerare
+PI_ID = "pi45791" # Identificativo del Raspberry Pi da triggerare
 TIMEZONE = "Europe/Rome"
 # --- Fine Configurazione Utente ---
 

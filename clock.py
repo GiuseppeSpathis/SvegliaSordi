@@ -12,11 +12,12 @@ import signal
 import sys
 import pytz
 from datetime import datetime
-import requests
 import logging
 import json
 import random   # Per generare ID random
 import os       # Per controllare esistenza file
+import firebase_admin
+from firebase_admin import credentials, db
 
 # --- Configurazione Utente ---
 # Pin GPIO (BCM numbering)
@@ -63,6 +64,8 @@ def get_or_generate_pi_id(filename: str):
     Restituisce None se si verifica un errore critico.
     """
     script_dir = os.path.dirname(os.path.realpath(__file__))
+    
+    
     filepath = os.path.join(script_dir, filename)
 
     if os.path.exists(filepath):
@@ -77,14 +80,17 @@ def get_or_generate_pi_id(filename: str):
         new_id = f"pi{random_part:05d}"
         with open(filepath, "w") as f:
             f.write(new_id)
-        return new_id
+        return new_id, script_dir
   
 
 # --- Ottieni l'ID del Pi all'avvio ---
-MY_PI_ID = get_or_generate_pi_id(PI_ID_FILENAME)
+MY_PI_ID, script_dir = get_or_generate_pi_id(PI_ID_FILENAME)
 
-# Costruisci URL Trigger specifico per questo Pi
-TRIGGER_URL = f"{FIREBASE_DB_URL}/triggers/{MY_PI_ID}.json"
+cred = credentials.Certificate(os.path.join(script_dir, "firebaseKey.json"))
+firebase_admin.initialize_app(cred, {
+    "databaseURL": FIREBASE_DB_URL
+})
+
 
 # --- Setup Hardware ---
 lcd = None
@@ -219,26 +225,13 @@ while True:
         current_trigger_state = False
         firebase_error = False
         try:
-            response = requests.get(TRIGGER_URL, timeout=10)
-            response.raise_for_status()
-            trigger_value = response.json()
-            if trigger_value is True:
-                current_trigger_state = True
-        except requests.exceptions.Timeout:
-            current_trigger_state = last_trigger_state
-            firebase_error = True
-        except requests.exceptions.RequestException as e:
-            current_trigger_state = False
-            firebase_error = True
-        except json.JSONDecodeError:
-            try:
-                resp_text = response.text if 'response' in locals() else 'N/A'
-            except:
-                resp_text = 'N/A'
-            current_trigger_state = False
-            firebase_error = True
+            trigger_value = db.reference(f"/triggers/{MY_PI_ID}").get()
+            current_trigger_state = (trigger_value is True)
+            firebase_error = False
         except Exception as e:
-            current_trigger_state = False
+            print("Firebase Admin error:", e)
+            # conserva lo stato precedente o gestisci l’errore
+            current_trigger_state = last_trigger_state
             firebase_error = True
 
         # 2. Gestisce il cambio dello stato del trigger
