@@ -1,0 +1,14 @@
+[Unit]
+Description=SvegliaSordi Clock Script
+After=multi-user.target network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/giuse/Desktop/SvegliaSordi/clock.py
+WorkingDirectory=/home/giuse/Desktop/SvegliaSordi
+StandardOutput=journal
+StandardError=journal
+Restart=always
+User=giuse
+[Install]
+WantedBy=multi-user.target

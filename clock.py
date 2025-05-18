@@ -55,6 +55,7 @@ display_mode = 'clock'                 # 'clock', 'showing_id' o 'vibrator_messa
 id_display_start_time = None           # Timestamp per timeout display ID
 vibrator_motor_enabled = True          # Vibrator motor abilitato di default
 vibrator_message_start_time = None     # Timestamp per il timeout del messaggio vibrator
+startup_time = time.monotonic()     # Tempo di avvio del programma (per gestione messaggi connessione)
 
 # --- Funzione per Leggere/Generare ID Pi ---
 def get_or_generate_pi_id(filename: str):
@@ -72,7 +73,7 @@ def get_or_generate_pi_id(filename: str):
         with open(filepath, "r") as f:
             pi_id = f.read().strip()
         if pi_id and pi_id.startswith("pi") and len(pi_id) == 7 and pi_id[2:].isdigit():
-            return pi_id
+            return pi_id, script_dir
         else:
             os.remove(filepath)
 
@@ -232,7 +233,8 @@ while True:
             print("Firebase Admin error:", e)
             # conserva lo stato precedente o gestisci l’errore
             current_trigger_state = last_trigger_state
-            firebase_error = True
+            # Solo dopo 5 secondi di avvio segnala errore
+            firebase_error = (time.monotonic() - startup_time) > 15
 
         # 2. Gestisce il cambio dello stato del trigger
         if not firebase_error:
