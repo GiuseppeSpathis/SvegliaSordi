@@ -1,2 +1,6 @@
 # SvegliaSordi
-creare una sveglia per sordi usando Raspberry Pi Zero
+This project, titled "Sveglia per Sordi" (Alarm Clock for the Deaf), aims to create an alarm clock specifically designed for individuals who are deaf, hard of hearing, or have other auditory difficulties. Instead of traditional acoustic stimuli, the device uses visual (LED lights) and tactile (a vibrating motor, e.g., placed under a pillow) signals to wake the user.
+
+The alarm clock can be controlled remotely via a Telegram bot ("Raspberry Pi Clock Bot"), allowing users to set, modify, or delete alarms. The system supports multiple users, with each alarm associated with a specific Raspberry Pi, making it scalable. Alarm data is stored in a Firebase Realtime Database for synchronization across devices. The Telegram bot management runs on a separate server, while a Python script on a Raspberry Pi Zero continuously monitors the database and activates the alarm signals (LEDs and vibration) at the scheduled time. The project also includes a custom 3D-printed case to house all the components, creating a compact and user-friendly device.
+
+Key innovative aspects include the combined use of visual and tactile stimuli, remote alarm management via Telegram and a Firebase data synchronization for multi-device access
