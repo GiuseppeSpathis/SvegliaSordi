@@ -12,8 +12,6 @@ import signal
 import sys
 import pytz
 from datetime import datetime
-import logging
-import json
 import random   # Per generare ID random
 import os       # Per controllare esistenza file
 import firebase_admin
@@ -233,7 +231,7 @@ while True:
             print("Firebase Admin error:", e)
             # conserva lo stato precedente o gestisci l’errore
             current_trigger_state = last_trigger_state
-            # Solo dopo 5 secondi di avvio segnala errore
+            # Solo dopo 15 secondi di avvio segnala errore
             firebase_error = (time.monotonic() - startup_time) > 15
 
         # 2. Gestisce il cambio dello stato del trigger

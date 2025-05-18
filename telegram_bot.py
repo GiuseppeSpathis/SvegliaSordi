@@ -38,7 +38,7 @@ try:
 except Exception as e:
      logger.error(f"Errore inizializzazione Firebase: {e}", exc_info=True); exit()
 
-# --- Funzioni Database Firebase (Modificate per struttura /alarms/{pi_id}) ---
+# --- Funzioni Database Firebase ---
 
 def get_pi_id_for_user(user_id: str) -> str | None:
     """Recupera il pi_id associato a un utente da /pairings/{user_id}."""
@@ -119,7 +119,7 @@ def require_pairing(func):
         return await func(update, context, *args, **kwargs)
     return wrapper
 
-# --- Funzioni Handler Comandi Bot (Aggiornate) ---
+# --- Funzioni Handler Comandi Bot  ---
 
 async def start(update: Update, context: CallbackContext):
     user_id = str(update.effective_user.id)
@@ -151,7 +151,6 @@ async def pair_command(update: Update, context: CallbackContext):
         await update.message.reply_text("❌ Formato non valido. Usa: `/pair ID_DEL_TUO_PI`\n(Trovi l'ID premendo il bottone giallo sul Pi).")
         return
     pi_id_to_pair = context.args[0].strip()
-    # Potresti aggiungere validazioni sull'ID qui (es. lunghezza, caratteri)
     if not pi_id_to_pair:
          await update.message.reply_text("❌ ID non valido.")
          return
@@ -175,9 +174,9 @@ async def unpair_command(update: Update, context: CallbackContext):
 
 @require_pairing # Applica il controllo prima di eseguire
 async def add_alarm(update: Update, context: CallbackContext):
-    # pi_id è ora disponibile da context.user_data grazie al decorator
+   
     pi_id = context.user_data.get('pi_id')
-    # user_id = str(update.message.from_user.id) # Non più necessario qui
+   
 
     if len(context.args) != 2:
         await update.message.reply_text("❌ Formato: `/add YYYY-MM-DD HH:MM`")
@@ -185,7 +184,7 @@ async def add_alarm(update: Update, context: CallbackContext):
 
     date_str, time_str = context.args
     try:
-        # ... (stessa validazione data/ora di prima) ...
+        
         alarm_dt_naive = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
         alarm_dt_aware = tz_info.localize(alarm_dt_naive)
         now_aware = datetime.now(tz_info)
@@ -273,7 +272,7 @@ def check_and_trigger_alarms_runner():
     """Loop principale del thread che controlla gli allarmi per tutti i Pi."""
     global keep_running
     logger.info("Thread check_and_trigger_alarms: Avviato.")
-    # Non serve più riferimento globale al trigger, lo cerchiamo dinamicamente
+   
 
     while keep_running:
         now_aware = datetime.now(tz_info)
