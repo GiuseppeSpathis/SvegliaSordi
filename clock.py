@@ -133,6 +133,12 @@ def disable_button_pressed_callback():
         alarm_manually_disabled = True
         time_button_pressed = time.monotonic()
         turn_off_leds()
+        
+        try:
+            db.reference(f'/triggers/{MY_PI_ID}').set(False)
+            print("DEBUG: Trigger resettato a False su Firebase (button disable).")
+        except Exception as e:
+            print(f"Errore nel resettare il trigger su Firebase: {e}")
     
 
 def id_display_button_callback():
