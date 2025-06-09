@@ -2,7 +2,6 @@
 # Legge trigger da Firebase, controlla LED/LCD, bottone disabilitazione,
 # bottone mostra ID, gestisce il vibrator motor, e resetta il flag di disabilitazione all'inizio di ogni nuovo minuto.
 
-
 import RPi.GPIO as GPIO
 from Adafruit_CharLCD import Adafruit_CharLCD
 from gpiozero import Button
@@ -32,55 +31,52 @@ ID_DISPLAY_BUTTON_PIN = 4          # Bottone Giallo per mostrare ID (GPIO 4)
 VIBRATOR_TOGGLE_BUTTON_PIN = 22    # Bottone per abilitare/disabilitare il vibrator motor
 
 # Firebase
-FIREBASE_DB_URL = "https://svegliasordi-default-rtdb.europe-west1.firebasedatabase.app"  
+FIREBASE_DB_URL = "https://svegliasordi-default-rtdb.europe-west1.firebasedatabase.app"
 
 # Altro
 TIMEZONE = "Europe/Rome"
-POLLING_INTERVAL = 2              # Secondi tra i controlli Firebase in modalità clock
+POLLING_INTERVAL = 2              # Secondi tra i controlli per l'LCD
 DISABLED_MESSAGE_DURATION = 8     # Secondi per cui mostrare "Sveglia disab."
-ID_DISPLAY_DURATION = 12           # Secondi per cui mostrare l'ID Pi
-VIBRATOR_MESSAGE_DURATION = 2      # Durata in secondi del messaggio sullo schermo per il vibrator motor
-PI_ID_FILENAME = "pi_id.txt"       # Nome del file per salvare l'ID
+ID_DISPLAY_DURATION = 12          # Secondi per cui mostrare l'ID Pi
+VIBRATOR_MESSAGE_DURATION = 2     # Durata in secondi del messaggio sullo schermo per il vibrator motor
+PI_ID_FILENAME = "pi_id.txt"      # Nome del file per salvare l'ID
 # --- Fine Configurazione Utente ---
 
 
 # --- Variabili Globali di Stato ---
 alarm_manually_disabled = False      # Flag per disabilitazione manuale
-time_button_pressed = None             # Timestamp della pressione del bottone disabilitazione
+time_button_pressed = None           # Timestamp della pressione del bottone disabilitazione
 last_lcd_message = ""
-last_trigger_state = False             # Stato precedente del trigger letto da Firebase
-display_mode = 'clock'                 # 'clock', 'showing_id' o 'vibrator_message'
-id_display_start_time = None           # Timestamp per timeout display ID
-vibrator_motor_enabled = True          # Vibrator motor abilitato di default
-vibrator_message_start_time = None     # Timestamp per il timeout del messaggio vibrator
-startup_time = time.monotonic()     # Tempo di avvio del programma (per gestione messaggi connessione)
+last_trigger_state = False           # Stato precedente del trigger ricevuto da Firebase
+display_mode = 'clock'               # 'clock', 'showing_id' o 'vibrator_message'
+id_display_start_time = None         # Timestamp per timeout display ID
+vibrator_motor_enabled = True        # Vibrator motor abilitato di default
+vibrator_message_start_time = None   # Timestamp per il timeout del messaggio vibrator
+startup_time = time.monotonic()      # Tempo di avvio del programma (per eventuale gestione errori)
 
 # --- Funzione per Leggere/Generare ID Pi ---
 def get_or_generate_pi_id(filename: str):
     """
     Legge l'ID Pi dal file specificato. Se il file non esiste o è invalido,
     genera un nuovo ID nel formato 'piXXXXX', lo salva nel file e lo restituisce.
-    Restituisce None se si verifica un errore critico.
     """
     script_dir = os.path.dirname(os.path.realpath(__file__))
-    
-    
     filepath = os.path.join(script_dir, filename)
 
     if os.path.exists(filepath):
         with open(filepath, "r") as f:
             pi_id = f.read().strip()
-        if pi_id and pi_id.startswith("pi") and len(pi_id) == 7 and pi_id[2:].isdigit():
+        if pi_id.startswith("pi") and len(pi_id) == 7 and pi_id[2:].isdigit():
             return pi_id, script_dir
         else:
             os.remove(filepath)
 
-        random_part = random.randint(0, 99999)
-        new_id = f"pi{random_part:05d}"
-        with open(filepath, "w") as f:
-            f.write(new_id)
-        return new_id, script_dir
-  
+    random_part = random.randint(0, 99999)
+    new_id = f"pi{random_part:05d}"
+    with open(filepath, "w") as f:
+        f.write(new_id)
+    return new_id, script_dir
+
 
 # --- Ottieni l'ID del Pi all'avvio ---
 MY_PI_ID, script_dir = get_or_generate_pi_id(PI_ID_FILENAME)
@@ -90,7 +86,6 @@ firebase_admin.initialize_app(cred, {
     "databaseURL": FIREBASE_DB_URL
 })
 
-
 # --- Setup Hardware ---
 lcd = None
 disable_button = None
@@ -99,18 +94,25 @@ vibrator_toggle_button = None
 
 tz_info = pytz.timezone(TIMEZONE)
 GPIO.setmode(GPIO.BCM)
+
 # Configura LED e vibrator motor
 GPIO.setup(LED_PIN, GPIO.OUT, initial=GPIO.LOW)
 GPIO.setup(MOTOR_PIN, GPIO.OUT, initial=GPIO.LOW)
+
 # Configura bottoni con gpiozero
 disable_button = Button(DISABLE_BUTTON_PIN, pull_up=True)
 id_display_button = Button(ID_DISPLAY_BUTTON_PIN, pull_up=True)
 vibrator_toggle_button = Button(VIBRATOR_TOGGLE_BUTTON_PIN, pull_up=True)
+
 # Inizializza LCD
-lcd = Adafruit_CharLCD(rs=LCD_RS, en=LCD_E, d4=LCD_D4, d5=LCD_D5, d6=LCD_D6, d7=LCD_D7, cols=16, lines=2)
+lcd = Adafruit_CharLCD(
+    rs=LCD_RS, en=LCD_E, d4=LCD_D4, d5=LCD_D5, d6=LCD_D6, d7=LCD_D7,
+    cols=16, lines=2
+)
 lcd.clear()
 lcd.enable_display(True)
 lcd.home()
+
 
 # --- Funzioni per gestire LED e Vibrator Motor ---
 def light_leds():
@@ -124,29 +126,66 @@ def turn_off_leds():
     """Spegne i LED e il vibrator motor."""
     GPIO.output(LED_PIN, GPIO.LOW)
     GPIO.output(MOTOR_PIN, GPIO.LOW)
-        
 
+
+# --- Callback per il listener Firebase ---
+def on_trigger_change(event):
+    """
+    Eseguito non appena cambia il valore in /triggers/MY_PI_ID.
+    event.data == True  → accendi sveglia
+    event.data == False → spegni sveglia
+    """
+    global alarm_manually_disabled, last_trigger_state
+
+    valore = event.data  # Può essere True, False o None
+    if valore is True and not last_trigger_state:
+        # Nuovo trigger a True → accendi sveglia
+        alarm_manually_disabled = False
+        light_leds()
+        last_trigger_state = True
+
+    elif valore is False and last_trigger_state:
+        # Trigger tornato a False → spegni sveglia
+        alarm_manually_disabled = False
+        turn_off_leds()
+        last_trigger_state = False
+
+    # Se valore è None o uguale allo stato precedente, non fare nulla
+
+
+# --- Callback per il bottone di disabilitazione ---
 def disable_button_pressed_callback():
-    """Callback per il bottone di DISABILITAZIONE."""
+    """
+    Callback per il bottone DISABLE_BUTTON_PIN.
+    Se c'è una sveglia in corso, la disabilita e azzera anche il trigger in Firebase.
+    """
     global alarm_manually_disabled, time_button_pressed
+
     if last_trigger_state and not alarm_manually_disabled:
         alarm_manually_disabled = True
         time_button_pressed = time.monotonic()
         turn_off_leds()
-        
+
         try:
             db.reference(f'/triggers/{MY_PI_ID}').set(False)
             print("DEBUG: Trigger resettato a False su Firebase (button disable).")
         except Exception as e:
             print(f"Errore nel resettare il trigger su Firebase: {e}")
-    
 
+
+# --- Callback per il bottone di visualizzazione ID ---
 def id_display_button_callback():
-    """Callback per il bottone per mostrare l'ID."""
+    """
+    Callback per il bottone ID_DISPLAY_BUTTON_PIN.
+    Mostra l'ID del dispositivo sul display per un breve periodo.
+    """
     global display_mode, id_display_start_time, last_lcd_message
+
     if display_mode == 'showing_id':
+        # Se già in mostra ID, ripristina semplicemente il timer
         id_display_start_time = time.monotonic()
         return
+
     display_mode = 'showing_id'
     id_display_start_time = time.monotonic()
     if lcd:
@@ -155,27 +194,32 @@ def id_display_button_callback():
             lcd.message(f"ID:{MY_PI_ID[:16]}\n{MY_PI_ID[16:]}")
         else:
             lcd.message(f"ID Dispositivo:\n{MY_PI_ID.center(16)}")
-    
 
+
+# --- Callback per il bottone di toggle vibrator motor ---
 def vibrator_motor_toggle_callback():
-    """Callback per il bottone che abilita/disabilita il vibrator motor."""
+    """
+    Callback per il bottone VIBRATOR_TOGGLE_BUTTON_PIN.
+    Abilita/disabilita il vibrator motor e mostra un messaggio temporaneo.
+    """
     global vibrator_motor_enabled, display_mode, vibrator_message_start_time, last_lcd_message
+
     vibrator_motor_enabled = not vibrator_motor_enabled
     status_msg = "vibrator motor \nabilitato" if vibrator_motor_enabled else "vibrator motor \ndisabilitato"
     display_mode = 'vibrator_message'
     vibrator_message_start_time = time.monotonic()
+
     if lcd:
         lcd.clear()
         lcd.message(status_msg)
-    
 
-# Associa le callback ai bottoni (se gli oggetti sono stati creati)
+
+# Associa le callback ai bottoni
 if disable_button:
     disable_button.when_pressed = disable_button_pressed_callback
 
 if id_display_button:
     id_display_button.when_pressed = id_display_button_callback
-
 
 if vibrator_toggle_button:
     vibrator_toggle_button.when_pressed = vibrator_motor_toggle_callback
@@ -187,27 +231,30 @@ def cleanup_resources(signum=None, frame=None):
     if lcd:
         lcd.clear()
         lcd.enable_display(False)
-            
-    if 'GPIO' in sys.modules:
-        if GPIO.getmode() is not None:
-            GPIO.output(LED_PIN, GPIO.LOW)
-            GPIO.output(MOTOR_PIN, GPIO.LOW)
-        
+
+    if 'GPIO' in sys.modules and GPIO.getmode() is not None:
+        GPIO.output(LED_PIN, GPIO.LOW)
+        GPIO.output(MOTOR_PIN, GPIO.LOW)
         GPIO.cleanup()
-    
+
     sys.exit(0)
+
 
 signal.signal(signal.SIGINT, cleanup_resources)
 signal.signal(signal.SIGTERM, cleanup_resources)
 
-# --- Loop Principale ---
 
-# Variabile per tenere traccia del minuto corrente (per il reset del flag)
+# --- Imposta il listener Firebase per i trigger ---
+trigger_ref = db.reference(f"/triggers/{MY_PI_ID}")
+trigger_ref.listen(on_trigger_change)
+
+
+# --- Loop Principale ---
 current_minute = None
 print("Inizializzazione completata. In attesa di eventi...")
 
 while True:
-    # Reset del flag alarm_manually_disabled ad inizio nuovo minuto
+    # Reset del flag alarm_manually_disabled all'inizio di ogni nuovo minuto
     now = datetime.now(tz_info)
     if current_minute is None or now.minute != current_minute:
         current_minute = now.minute
@@ -219,6 +266,7 @@ while True:
             display_mode = 'clock'
             id_display_start_time = None
             last_lcd_message = ""
+
     if display_mode == 'vibrator_message' and vibrator_message_start_time is not None:
         if time.monotonic() - vibrator_message_start_time > VIBRATOR_MESSAGE_DURATION:
             display_mode = 'clock'
@@ -226,37 +274,6 @@ while True:
             last_lcd_message = ""
 
     if display_mode == 'clock':
-        # 1. Legge stato trigger da Firebase
-        current_trigger_state = False
-        firebase_error = False
-        try:
-            trigger_value = db.reference(f"/triggers/{MY_PI_ID}").get()
-            current_trigger_state = (trigger_value is True)
-            firebase_error = False
-        except Exception as e:
-            print("Firebase Admin error:", e)
-            # conserva lo stato precedente o gestisci l’errore
-            current_trigger_state = last_trigger_state
-            # Solo dopo 15 secondi di avvio segnala errore
-            firebase_error = (time.monotonic() - startup_time) > 15
-
-        # 2. Gestisce il cambio dello stato del trigger
-        if not firebase_error:
-            if current_trigger_state and not last_trigger_state:
-                alarm_manually_disabled = False
-                time_button_pressed = None
-                light_leds()
-            elif not current_trigger_state and last_trigger_state:
-                alarm_manually_disabled = False
-                time_button_pressed = None
-                turn_off_leds()
-        if not current_trigger_state or alarm_manually_disabled:
-            turn_off_leds()
-        elif current_trigger_state and not alarm_manually_disabled:
-            light_leds()
-        if not firebase_error:
-            last_trigger_state = current_trigger_state
-
         # 3. Aggiornamento orologio su LCD
         if lcd:
             now_lcd = datetime.now(tz_info)
@@ -264,27 +281,29 @@ while True:
             ora_lcd = now_lcd.strftime("%H:%M:%S")
             new_message = ""
             message_set = False
+
+            # Se la sveglia è disabilitata manualmente
             if alarm_manually_disabled and time_button_pressed is not None:
                 if time.monotonic() - time_button_pressed <= DISABLED_MESSAGE_DURATION:
                     new_message = f"Sveglia disab.\n{ora_lcd}"
                     message_set = True
+
             if not message_set:
-                effective_trigger_state = last_trigger_state if firebase_error else current_trigger_state
-                if effective_trigger_state and not alarm_manually_disabled:
+                # Se il trigger è attivo e non è disabilitato manualmente
+                if last_trigger_state and not alarm_manually_disabled:
                     new_message = f"SVEGLIA ATTIVA!\n{ora_lcd}"
                     message_set = True
+
             if not message_set:
-                if firebase_error:
-                    new_message = f"Errore Rete FB\n{ora_lcd}"
-                else:
-                    new_message = f"{data_lcd}\n{ora_lcd}"
+                new_message = f"{data_lcd}\n{ora_lcd}"
+
             if new_message != last_lcd_message:
                 lcd.clear()
                 lcd.message(new_message)
                 last_lcd_message = new_message
-        
-        sleep(POLLING_INTERVAL)
-    else:
-        # In modalità differenti (showing_id o vibrator_message), controlla più spesso il timeout
-        sleep(0.5)
 
+        sleep(POLLING_INTERVAL)
+
+    else:
+        # In modalità 'showing_id' o 'vibrator_message', controlla più spesso il timeout
+        sleep(0.5)
